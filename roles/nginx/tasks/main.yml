@@ -1,0 +1,42 @@
+---
+
+# Configurar o repositorio oficial do nginx
+
+- name: Copiando repositorio oficial do nginx
+  copy: src=nginx.repo dest=/etc/yum.repos.d/nginx.repo owner=root group=root
+  when: ansible_distribution == 'RedHat' or ansible_distribution == 'CentOS'
+
+- name: Atualizar o sistema
+  yum: name=* state=latest update_cache=yes
+  when: ansible_distribution == 'RedHat' or ansible_distribution == 'CentOS'
+
+- name: Instalacao dos pacotes do nginx
+  yum:
+    name: ['nginx.x86_64', 'nginx-module-geoip.x86_64']
+    state: latest
+  when: ansible_distribution == 'RedHat' or ansible_distribution == 'CentOS'
+
+- name: Criando copia de seguranca do /etc/nginx
+  command: mv /etc/nginx /etc/nginx_original
+  args:
+    warn: false
+  when: ansible_distribution == 'RedHat' or ansible_distribution == 'CentOS'
+
+- name: Copiando nginx.tar.gz
+  unarchive:
+    src: nginx.tar.gz
+    dest: /etc/
+    owner: root
+    group: root
+  when: ansible_distribution == 'RedHat' or ansible_distribution == 'CentOS'
+
+- name: Criacao do diretorio /var/www/html
+  file: path={{item}} state=directory mode=0755 owner=nginx group=nginx
+  with_items:
+    - /var/www
+    - /var/www/html
+  notify: Restart nginx
+  when: ansible_distribution == 'RedHat' or ansible_distribution == 'CentOS'
+
+
+...

@@ -1,0 +1,82 @@
+---
+# tasks file for mysql
+- name: Instalando repositorios e pacotes
+  apt: name={{mariadb_packages}} state=latest install_recommends=yes update_cache=yes
+  vars:
+    mariadb_packages:
+      - mariadb-client
+      - mariadb-server
+      - python-mysqldb
+  when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+          
+
+- name: SISOP | Criando usuario e senha
+  command: openssl rand -base64 14 creates=/root/.my.cnf
+  register: mysql_root_pass
+  when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+  
+- name: SISOP | Display password 
+  debug:
+    msg: "Password: {{ mysql_root_pass.stdout }}"
+  when: 
+    - mysql_root_pass.changed
+    - ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+  
+- name: SISOP | Alterando a senha do root
+  mysql_user: name=root host={{ item }} password={{ mysql_root_pass.stdout }}
+  with_items:
+    - 127.0.0.1
+    - localhost
+  when: 
+    - mysql_root_pass.changed
+    - ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+
+- name: SISOP | Copiando template .my.cnf
+  template: src=.my.cnf dest=/root/.my.cnf
+  when: 
+    - mysql_root_pass.changed
+    - ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+
+- name: MARIADB | Removendo acesso anonymous
+  mysql_user: name="" host=localhost state=absent
+  when: 
+    - ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+        
+- name: MARIADB | Removendo base de test
+  mysql_db: name=test state=absent
+  when: 
+    - ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+        
+- name: Create a new database to wordpress site
+  mysql_db:
+    name: 'wordpress'
+    state: present
+    login_user: 'root'
+    login_password: "P1tCFL7Qx5cXYvazOqU="
+    login_host: 'localhost'
+  when: 
+    - mysql_root_pass.changed
+    - ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+
+- name: Create user to wordpress site and grant all privileges on DB
+  mysql_user:
+    name: 'wordpress'
+    password: 'wordpress'
+    priv: 'wordpress.*:ALL'
+    host: '192.168.254.%'
+    login_user: 'root'
+    login_password: "P1tCFL7Qx5cXYvazOqU="
+    login_host: 'localhost'
+  when:
+    - ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+
+- name: Liberando acesso remoto
+  lineinfile:
+    dest=/etc/mysql/mariadb.conf.d/50-server.cnf
+    regexp='bind-address            = 127.0.0.1'
+    line='bind-address            = 192.168.254.139'
+    state=present
+  notify: Restart MARIADB
+  when: 
+    - ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+...

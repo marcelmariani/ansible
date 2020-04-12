@@ -1,0 +1,114 @@
+---
+#--- General ---#
+- name: Change /etc/profile
+  lineinfile: dest=/etc/profile line={{ item }}
+  with_items:
+    - '#--- Default export & Alias ---#'
+    - 'export HISTTIMEFORMAT="%d/%m/%Y - %H:%M:%S - "'
+    - 'export HISTSIZE="5000"'
+    - 'export HISTFILESIZE="5000"'
+    - 'alias ls="ls -lh --color"'
+    - 'alias grep="grep --color"'
+    - 'alias vi="vim"'
+    - 'alias rm="rm -i"'
+    - '/etc/motd.sh'
+
+- name: Disable SELINUX (Permanet)
+  replace:
+      dest=/etc/selinux/config
+      regexp='SELINUX=enforcing'
+      replace='SELINUX=disabled'
+  when: ansible_distribution == 'CentOS' or ansible_distribution == 'RedHat'
+
+- name: Disable SELINUX (Temp)
+  shell: setenforce 0
+  when: ansible_distribution == 'CentOS' or ansible_distribution == 'RedHat'
+
+#--- Packages Manager RedHat ---
+- name: Install epel-repository
+  yum: name=epel-release state=latest
+  when: ansible_distribution == 'CentOS' or ansible_distribution == 'RedHat'
+
+- name: Update System
+  yum: name=* state=latest update_cache=yes
+  when: ansible_distribution == 'CentOS' or ansible_distribution == 'RedHat'
+
+- name: Install common packages
+  yum: name={{common_packages_redhat}} state=latest
+  when: ansible_distribution == 'CentOS' or ansible_distribution == 'RedHat'
+
+- name: Remove packages
+  yum: name={{item}} state=absent
+  with_items:
+    - NetworkManager
+    - NetworkManager-libnm
+    - firewalld
+    - postfix
+  when: ansible_distribution == 'CentOS' or ansible_distribution == 'RedHat'
+
+
+#--- Packages Manager Debian ---#
+- name: SISOP | Copiando sources.list
+  copy: src=sources.list dest=/etc/apt/sources.list
+  when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+
+- name: SISOP | Instalando pacotes
+  apt: name={{common_packages_debian}} state=latest install_recommends=yes update_cache=yes
+  when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+
+- name: SISOP | Executando dist-upgrade
+  apt: upgrade=dist
+  when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+
+#--- Manage users ---#
+- name: Change root password
+  user: name=root update_password=always password={{ root_pass_sha256 }}
+
+- name: Add user ontic
+  user:
+    name=treinamento
+    comment="Treinamento Ansible"
+    shell=/bin/bash
+    home=/home/treinamento
+    password="344db06e7ee931c79451d33eb9b2eb1a"
+
+
+#--- Timezone Settings ---#
+- name: Configurando localtime
+  file: src=/usr/share/zoneinfo/America/Sao_Paulo dest=/etc/localtime state=link force=yes owner=root group=root
+#    when: ansible_distribution == 'CentOS' or ansible_distribution == 'RedHat'
+
+
+#--- SSH Service ---#
+- name: Setting basic SSH options
+  lineinfile:
+    dest=/etc/ssh/sshd_config
+    state=present
+    regexp={{ item.regexp }}
+    line={{ item.line }}
+  with_items:
+    - { regexp: '#Port 22', line: 'Port 22' }
+    - { regexp: '#PermitRootLogin yes', line: 'PermitRootLogin without-password' }
+    - { regexp: '#Banner none', line: 'Banner /etc/ssh/banner_ssh' }
+    - { regexp: 'X11Forwarding yes', line: 'X11Forwarding no' }
+
+- name: Active Protocol 2 to SSH 
+  lineinfile:
+      dest=/etc/ssh/sshd_config
+      line='Protocol 2'
+
+- name: Setting Allow Users to access (SSH)
+  lineinfile:
+      dest=/etc/ssh/sshd_config
+      line='AllowUsers ontic'
+
+- name: Add Motd
+  template: src=motd dest=/etc/motd force=yes owner=root group=root mode=0755
+
+- name: Add SSH Banner
+  copy: src=banner_ssh dest=/etc/ssh/banner_ssh
+  notify:
+    - Restart SSH
+
+
+

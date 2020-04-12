@@ -1,0 +1,9 @@
+---
+- name: Playbook Final
+  hosts: all
+  roles:
+    #- common
+    #- mysql
+    #- nginx
+    - php
+    #- wordpress
